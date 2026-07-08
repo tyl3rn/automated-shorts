@@ -270,7 +270,7 @@ def main():
     ap.add_argument("--limit", type=int, default=25, help="how many posts to pull as candidates")
     ap.add_argument("--min-len", type=int, default=400)
     ap.add_argument("--max-len", type=int, default=2200)
-    ap.add_argument("--min-score", type=int, default=70,
+    ap.add_argument("--min-score", type=int, default=65,
                     help="if the best candidate scores below this, exit 2 (skip this run rather than post a dud)")
     ap.add_argument("--seen-file", default="seen_story_ids.json")
     ap.add_argument("--out", default="story.txt")
