@@ -107,6 +107,11 @@ def _html_to_text(fragment: str) -> str:
     text = re.sub(r"<br\s*/?>", "\n", text)
     text = re.sub(r"<[^>]+>", "", text)
     text = html.unescape(text)
+    # Double-escaped HTML (e.g. &lt;br&gt; in the feed) only becomes a literal
+    # tag AFTER unescaping -- strip tags a second time or the narrator reads
+    # "B R" out loud.
+    text = re.sub(r"<br\s*/?>", "\n", text)
+    text = re.sub(r"</?[a-zA-Z][^>]*>", "", text)
     # listing feeds append a "submitted by /u/... [link] [comments]" footer
     text = re.sub(r"submitted by\s+/u/\S+.*?\[comments\]\s*$", "", text, flags=re.S)
     return text.strip()
