@@ -42,6 +42,30 @@ scores candidates and refuses to produce anything below a quality bar.
 Every stage is its own module with a CLI, so each step can be run and
 debugged alone. `main.py` chains them.
 
+## Finding stories
+
+The bot doesn't search the internet. It draws from a hand-picked pool of
+subreddits that reliably produce narratable stories (confession subs, AITA
+subs, tifu, nosleep, LetsNotMeet, AskReddit). Each run either takes a
+subreddit you name or rolls a weighted random one from the pool.
+
+From there the funnel is:
+
+1. Pull the top posts for a time window (day by default, up to all time).
+   Reddit's own upvote ranking is the first quality filter, for free.
+2. Drop anything already used (post IDs live in a seen file, so a story can
+   never become two videos), anything deleted or stickied, and anything
+   outside the narration length window, roughly 60 to 120 seconds read
+   aloud.
+3. Fetch the top comments for the survivors. Comments are how the judge
+   reads the room: real audience shock or laughter counts as evidence.
+4. Judge and gate (next section).
+
+AskReddit works differently because the post is just a question. There the
+top comment becomes the story ("doctors, what deathbed confession stuck with
+you?" is a question, the answer is the content), and the remaining comments
+stay on as the audience signal.
+
 ## Scoring
 
 Each candidate gets a structured scorecard from Claude: an overall 0-100
