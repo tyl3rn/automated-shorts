@@ -56,6 +56,19 @@ the core of the project: an automated evaluation gate that reasons about *why*
 content will or won't perform, using the post's own comment thread as a
 corroborating audience signal.
 
+**How scoring works.** Each candidate gets a schema-enforced scorecard:
+`overall` (0-100, gated at a configurable threshold, default 65) plus
+diagnostic sub-scores (`hook`, `emotional_intensity`, `narratability`,
+`audience_signal`), a `category`, a `needs_ending_fix` flag, and a written
+`reason`. The overall is deliberately a *holistic judgment*, not a weighted
+average of the sub-scores -- the rubric constrains it with overriding rules
+(a weak opening caps the score below 50 regardless of the rest; a weak ending
+does not lower it, it sets the fix flag instead; unsafe content is forced to
+zero) and the judge weighs the post's real comment thread as corroborating
+audience evidence. Scores are judgments, so they wobble a few points between
+runs; the gate threshold accounts for that. Owner ratings collected through
+the web UI are injected as a taste profile that biases future judgments.
+
 **Multi-model cost routing.** High-volume judging and caption-writing run on
 `claude-sonnet-5` (cheaper, near-Opus judgment). The single creative
 writing call — the "script doctor" that rewrites flat endings into a twist — runs
