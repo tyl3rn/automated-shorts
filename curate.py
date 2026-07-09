@@ -264,15 +264,25 @@ def punch_up_ending(winner: dict, flagged: bool) -> str:
         max_tokens=4000,
         system=(
             "You are the script doctor for a shorts channel narrating Reddit "
-            "stories. Your one job: make sure the ending LANDS. If the ending "
-            "is flat, replace the final portion with a shock beat, twist, "
-            "reveal, or 'WTF did I just watch' turn that feels like a natural "
-            "escalation of everything before it. Rules: keep the first-person "
-            "reddit voice and tone; keep everything before the ending intact "
-            "except tiny connective edits; stay within +-15% of the original "
-            "length; keep it plausible enough to not read as fiction; nothing "
-            "sexually explicit, nothing unsafe involving minors. If the "
-            "ending already slaps, return the story unchanged."
+            "stories. Your one job: the ending must hit like a BLACK MIRROR "
+            "TWIST -- an unexpected final reveal that recontextualizes "
+            "everything the viewer just heard and leaves them in stunned "
+            "'WTF did I just watch' silence, then scrambling to the comments. "
+            "The last line IS the twist, stated flatly. No moralizing after "
+            "it, no reflection, no wrap-up sentence.\n\n"
+            "HARD RULES:\n"
+            "- NEVER end on a question to the audience ('so AITA?', 'was I "
+            "wrong?', 'has anyone else experienced this?'). If the original "
+            "ends that way, cut the question even if you change nothing else.\n"
+            "- The twist must feel seeded by the story -- a detail mentioned "
+            "earlier gains sinister/absurd new meaning. You may plant one "
+            "small detail earlier to make the twist land, but keep the body "
+            "otherwise intact.\n"
+            "- Keep the first-person reddit voice; stay within +-15% of the "
+            "original length; plausible enough not to read as fiction.\n"
+            "- Nothing sexually explicit, nothing unsafe involving minors.\n"
+            "If the original ending already delivers a genuine shock-twist, "
+            "keep it (but still strip any trailing audience-question)."
         ),
         messages=[{
             "role": "user",
@@ -324,6 +334,8 @@ def main():
     ap.add_argument("--max-len", type=int, default=2200)
     ap.add_argument("--min-score", type=int, default=65,
                     help="if the best candidate scores below this, exit 2 (skip this run rather than post a dud)")
+    ap.add_argument("--max-videos", type=int, default=3,
+                    help="produce up to this many stories per crawl (every candidate clearing --min-score, best first)")
     ap.add_argument("--seen-file", default="seen_story_ids.json")
     ap.add_argument("--out", default="story.txt")
     args = ap.parse_args()
@@ -381,43 +393,55 @@ def main():
               f"audience={s.audience_signal} -- {s.reason}{marker}")
     print(f"Verdict: {card.verdict}")
 
-    best_score = next(s for s in card.scores if s.index == card.best_index)
-    if best_score.overall < args.min_score:
-        print(f"Best candidate only scored {best_score.overall} (< {args.min_score}). "
+    qualifying = sorted(
+        (s for s in card.scores if s.overall >= args.min_score),
+        key=lambda s: -s.overall,
+    )[: args.max_videos]
+
+    if not qualifying:
+        best = max(card.scores, key=lambda s: s.overall)
+        print(f"Best candidate only scored {best.overall} (< {args.min_score}). "
               f"Skipping this run.", file=sys.stderr)
         sys.exit(2)
 
-    winner = candidates[card.best_index]
-    seen_ids.add(winner["id"])
+    # The crawl is the expensive part -- turn every qualifying story from it
+    # into a video-ready package: doctored ending + upload copy + files.
+    base = Path(args.out)
+    batch = []
+    for rank, score in enumerate(qualifying, 1):
+        winner = candidates[score.index]
+        seen_ids.add(winner["id"])
+
+        print(f"\n[{rank}/{len(qualifying)}] '{winner['title'][:70]}' ({score.overall}/100)")
+        print("  Running the ending doctor...")
+        doctored = punch_up_ending(winner, score.needs_ending_fix)
+        ending_rewritten = doctored != winner["body"]
+        winner["body"] = doctored
+
+        out_txt = base.with_name(f"{base.stem}-{rank}.txt")
+        out_txt.write_text(f"{winner['title']}. {winner['body']}", encoding="utf-8")
+        meta = {k: v for k, v in winner.items() if k not in ("body", "comments")}
+        meta["curation"] = score.model_dump()
+        meta["ending_rewritten"] = ending_rewritten
+        out_txt.with_suffix(".meta.json").write_text(
+            json.dumps(meta, indent=2), encoding="utf-8"
+        )
+
+        print("  Writing platform upload copy...")
+        copy = generate_upload_copy(winner)
+        upload = copy.model_dump()
+        # Both platforms get their AI toggle set at upload time; recorded here
+        # so the uploaders (and a human posting manually) don't forget.
+        upload["ai_disclosure"] = {"tiktok_aigc_label": True, "youtube_altered_content": True}
+        upload["source_permalink"] = winner["permalink"]
+        out_txt.with_suffix(".upload.json").write_text(
+            json.dumps(upload, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        batch.append(str(out_txt))
+
     seen_path.write_text(json.dumps(sorted(seen_ids)), encoding="utf-8")
-
-    print("Running the ending doctor...")
-    doctored = punch_up_ending(winner, best_score.needs_ending_fix)
-    ending_rewritten = doctored != winner["body"]
-    winner["body"] = doctored
-
-    Path(args.out).write_text(f"{winner['title']}. {winner['body']}", encoding="utf-8")
-    meta = {k: v for k, v in winner.items() if k not in ("body", "comments")}
-    meta["curation"] = best_score.model_dump()
-    meta["ending_rewritten"] = ending_rewritten
-    Path(args.out).with_suffix(".meta.json").write_text(
-        json.dumps(meta, indent=2), encoding="utf-8"
-    )
-
-    print("Writing platform upload copy...")
-    copy = generate_upload_copy(winner)
-    upload = copy.model_dump()
-    # Both platforms get their AI toggle set at upload time; recorded here so
-    # the uploaders (and a human posting manually) don't forget.
-    upload["ai_disclosure"] = {"tiktok_aigc_label": True, "youtube_altered_content": True}
-    upload["source_permalink"] = winner["permalink"]
-    Path(args.out).with_suffix(".upload.json").write_text(
-        json.dumps(upload, indent=2, ensure_ascii=False), encoding="utf-8"
-    )
-    print(f"TikTok caption: {copy.tiktok_caption}")
-
-    print(f"\nPicked: '{winner['title']}' (virality {best_score.overall}/100, {best_score.category})")
-    print(f"Source: {winner['permalink']}")
+    base.with_suffix(".batch.json").write_text(json.dumps(batch, indent=2), encoding="utf-8")
+    print(f"\n{len(batch)} story package(s) ready.")
 
 
 if __name__ == "__main__":
