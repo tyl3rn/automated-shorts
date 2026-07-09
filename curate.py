@@ -278,6 +278,19 @@ def script_doctor(winner: dict, flagged: bool) -> ScriptPolish:
         if flagged else
         "The curator thinks the ending is fine -- only rewrite it if you strongly disagree."
     )
+    taste = ""
+    try:
+        from feedback import taste_memory
+        block = taste_memory()
+        if block:
+            taste = (
+                "\n\n" + block +
+                "\n\nApply whatever in the owner's notes concerns the WRITING "
+                "(twist style, pacing, tone, how endings land); ignore notes "
+                "that are purely about story selection."
+            )
+    except Exception:
+        pass
     response = client.messages.parse(
         model=DOCTOR_MODEL,
         thinking={"type": "adaptive"},
@@ -318,7 +331,7 @@ def script_doctor(winner: dict, flagged: bool) -> ScriptPolish:
             "4. CONSTRAINTS: stay within +-15% of the original length; "
             "plausible enough not to read as fiction; nothing sexually "
             "explicit, nothing unsafe involving minors."
-        ),
+        ) + taste,
         messages=[{
             "role": "user",
             "content": f"{hint}\n\nTitle: {winner['title']}\n\nStory:\n{winner['body']}",
