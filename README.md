@@ -105,9 +105,17 @@ story that clears the bar, up to a cap, not just the best one.
 
 ## Running it
 
+You need:
+
+- Python 3.11+ and ffmpeg on PATH
+- an Anthropic API key with credit on it (console.anthropic.com, set it as
+  `ANTHROPIC_API_KEY`). Usage is pay-per-token; a full batch run costs a few
+  cents, so even the $5 minimum credit lasts a long time
+- a background gameplay video (any long landscape mp4 works, it gets
+  center-cropped to vertical)
+
 ```bash
 pip install -r requirements.txt
-# needs ffmpeg on PATH, ANTHROPIC_API_KEY set, and a background video file
 
 # crawl a random subreddit from the pool, render up to 3 videos
 python main.py --background backgrounds/parkour.mp4 --out-dir demo
