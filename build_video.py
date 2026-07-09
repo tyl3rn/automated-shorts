@@ -25,16 +25,16 @@ ASSETS = Path(__file__).parent / "assets"
 
 
 def ensure_whoosh() -> Path:
-    """Synthesize a whoosh SFX once (filtered pink-noise swell) and cache it.
-    Played as the intro card fades out."""
+    """Synthesize a short, soft whoosh SFX once (filtered pink-noise swell)
+    and cache it. Played as the intro card sweeps away."""
     ASSETS.mkdir(exist_ok=True)
-    wav = ASSETS / "whoosh.wav"
+    wav = ASSETS / "whoosh_fast.wav"
     if not wav.exists():
         subprocess.run([
             "ffmpeg", "-y", "-v", "error",
-            "-f", "lavfi", "-i", "anoisesrc=color=pink:duration=0.7:amplitude=0.9:seed=7",
-            "-af", ("highpass=f=300,lowpass=f=2800,"
-                    "afade=t=in:st=0:d=0.22,afade=t=out:st=0.32:d=0.38,volume=2.0"),
+            "-f", "lavfi", "-i", "anoisesrc=color=pink:duration=0.4:amplitude=0.9:seed=7",
+            "-af", ("highpass=f=300,lowpass=f=2600,"
+                    "afade=t=in:st=0:d=0.10,afade=t=out:st=0.16:d=0.24,volume=1.6"),
             str(wav),
         ], check=True)
     return wav
@@ -86,14 +86,14 @@ def build(background: Path, narration: Path, captions: Path, out_path: Path, wid
         # until the narrator finishes the title, with a 0.3s fade-out and a
         # whoosh SFX mixed in as it leaves.
         whoosh = ensure_whoosh()
-        fade_start = max(card_until - 0.3, 0)
-        whoosh_ms = int(max(fade_start - 0.1, 0) * 1000)
+        fade_start = max(card_until - 0.2, 0)
+        whoosh_ms = int(max(fade_start - 0.05, 0) * 1000)
         filter_complex = (
             f"[0:v]{base}[bg];"
-            f"[2:v]format=rgba,fade=t=out:st={fade_start:.2f}:d=0.3:alpha=1[card];"
+            f"[2:v]format=rgba,fade=t=out:st={fade_start:.2f}:d=0.2:alpha=1[card];"
             f"[bg][card]overlay=(W-w)/2:(H-h)/2.8:enable='lt(t,{card_until:.2f})'[withcard];"
             f"[withcard]{subs}[vout];"
-            f"[3:a]adelay={whoosh_ms}|{whoosh_ms},volume=0.8[wh];"
+            f"[3:a]adelay={whoosh_ms}|{whoosh_ms},volume=0.35[wh];"
             f"[1:a][wh]amix=inputs=2:duration=first:normalize=0[aout]"
         )
         cmd += ["-i", str(card), "-i", str(whoosh),

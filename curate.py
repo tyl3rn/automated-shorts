@@ -27,6 +27,11 @@ import sys
 import time
 from pathlib import Path
 
+# Windows consoles default to cp1252, which cannot encode emoji in story
+# titles/captions -- a bare print() would crash the whole run.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 import anthropic
 from pydantic import BaseModel, Field
 
@@ -75,11 +80,13 @@ two sentences would not make a stranger physically stop scrolling, the
 overall score MUST be below 50 regardless of how good the rest is. A wild
 ending cannot save a slow open.
 
-THE LANDING RULE (overriding): a banger needs BOTH the hook AND the payoff.
-If the story opens explosively but deflates into something mundane -- no
-twist, no escalation, an ending that makes viewers feel baited -- cap the
-overall score at 60. Scores of 70+ are reserved for stories that stop the
-scroll AND stick the landing; those are the only ones that get posted.
+THE LANDING RULE: a banger needs BOTH the hook AND the payoff -- but a weak
+ending is FIXABLE in post-production (a script doctor punches up flat
+endings before narration). So: score primarily on hook + premise + raw
+material quality. If the opening is scroll-stopping but the ending deflates,
+DO NOT tank the overall score -- keep it high and set needs_ending_fix=true.
+Only score low when the premise itself is mundane; no ending rewrite can
+save a boring setup.
 
 How to judge -- in this priority order:
 
@@ -115,6 +122,7 @@ class CandidateScore(BaseModel):
     emotional_intensity: int = Field(description="0-100: strength of the funny/scary/weird/outrage payload")
     narratability: int = Field(description="0-100: works read aloud in 60-120s, no visuals/links needed")
     audience_signal: int = Field(description="0-100: how strongly the top comments corroborate a big reaction")
+    needs_ending_fix: bool = Field(description="true when the hook/premise is strong but the ending is flat and should be punched up before narration")
     reason: str = Field(description="1-2 sentences justifying the score")
 
 
@@ -236,6 +244,50 @@ def score_candidates(candidates) -> Scorecard:
     return response.parsed_output
 
 
+class EndingRewrite(BaseModel):
+    rewrote: bool = Field(description="true if the ending was changed")
+    story: str = Field(description="the full story body, with the punched-up ending if rewritten, otherwise unchanged")
+
+
+def punch_up_ending(winner: dict, flagged: bool) -> str:
+    """Script doctor: if the ending is flat, replace the final stretch with
+    something that lands -- a twist, a reveal, a WTF beat. The hook and body
+    stay; only the landing changes."""
+    client = anthropic.Anthropic()
+    hint = (
+        "The curator flagged this story's ending as flat -- rewrite it."
+        if flagged else
+        "The curator thinks the ending is fine -- only rewrite if you strongly disagree."
+    )
+    response = client.messages.parse(
+        model=MODEL,
+        max_tokens=4000,
+        system=(
+            "You are the script doctor for a shorts channel narrating Reddit "
+            "stories. Your one job: make sure the ending LANDS. If the ending "
+            "is flat, replace the final portion with a shock beat, twist, "
+            "reveal, or 'WTF did I just watch' turn that feels like a natural "
+            "escalation of everything before it. Rules: keep the first-person "
+            "reddit voice and tone; keep everything before the ending intact "
+            "except tiny connective edits; stay within +-15% of the original "
+            "length; keep it plausible enough to not read as fiction; nothing "
+            "sexually explicit, nothing unsafe involving minors. If the "
+            "ending already slaps, return the story unchanged."
+        ),
+        messages=[{
+            "role": "user",
+            "content": f"{hint}\n\nTitle: {winner['title']}\n\nStory:\n{winner['body']}",
+        }],
+        output_format=EndingRewrite,
+    )
+    result = response.parsed_output
+    if result.rewrote:
+        print("Ending doctor: rewrote the landing.")
+        return result.story.strip()
+    print("Ending doctor: original ending kept.")
+    return winner["body"]
+
+
 def generate_upload_copy(winner: dict) -> UploadCopy:
     """One extra cheap Claude call: platform-ready caption text for the
     winning story, saved alongside it so the uploaders can post as-is."""
@@ -327,9 +379,15 @@ def main():
     seen_ids.add(winner["id"])
     seen_path.write_text(json.dumps(sorted(seen_ids)), encoding="utf-8")
 
+    print("Running the ending doctor...")
+    doctored = punch_up_ending(winner, best_score.needs_ending_fix)
+    ending_rewritten = doctored != winner["body"]
+    winner["body"] = doctored
+
     Path(args.out).write_text(f"{winner['title']}. {winner['body']}", encoding="utf-8")
     meta = {k: v for k, v in winner.items() if k not in ("body", "comments")}
     meta["curation"] = best_score.model_dump()
+    meta["ending_rewritten"] = ending_rewritten
     Path(args.out).with_suffix(".meta.json").write_text(
         json.dumps(meta, indent=2), encoding="utf-8"
     )

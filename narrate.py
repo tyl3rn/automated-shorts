@@ -75,8 +75,9 @@ async def synthesize(text: str, voice: str, rate: str, out_mp3: Path, out_ass: P
             "this machine can actually reach Microsoft's TTS endpoint."
         )
 
-    # While the intro card is on screen the narrator reads the title; captions
-    # start after it. title_end is when the card should disappear.
+    # The narrator reads the title while the intro card is on screen; captions
+    # start with the story body. title_end tells the builder when to whoosh
+    # the card away.
     title_words = min(title_words, len(words))
     title_end = 0.0
     if title_words:
@@ -132,7 +133,8 @@ def main():
                     help="words shown at once (0 = random 1-2)")
     ap.add_argument("--out-audio", default="narration.mp3")
     ap.add_argument("--out-captions", default="captions.ass")
-    ap.add_argument("--title", default="", help="post title; captions are suppressed while it's read (intro card is on screen)")
+    ap.add_argument("--title", default="",
+                    help="post title; narrated over the intro card, captions start with the body")
     ap.add_argument("--out-timing", default=None, help="write {title_end: seconds} JSON here")
     args = ap.parse_args()
 
@@ -145,6 +147,7 @@ def main():
     except UnicodeDecodeError:  # tolerate files written before the utf-8 fix
         decoded = raw.decode("cp1252")
     text = " ".join(decoded.split())  # normalize whitespace/newlines
+
     asyncio.run(
         synthesize(
             text, voice, args.rate, Path(args.out_audio), Path(args.out_captions),

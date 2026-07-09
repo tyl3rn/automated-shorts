@@ -94,9 +94,11 @@ def main():
         "--out-audio", str(narration_mp3), "--out-captions", str(captions_ass),
     ])
 
-    # Card stays up while the narrator reads the title, minimum 3s so the
-    # hook visual has time to register.
-    card_until = max(3.0, json.loads(timing_json.read_text(encoding="utf-8"))["title_end"])
+    # Card leaves the moment the narrator finishes the title, so the story
+    # body starts with the screen already clear. Small floor for safety on
+    # freak one-word titles.
+    title_end = json.loads(timing_json.read_text(encoding="utf-8"))["title_end"]
+    card_until = max(1.2, title_end + 0.15)
 
     run([
         sys.executable, str(HERE / "build_video.py"),
