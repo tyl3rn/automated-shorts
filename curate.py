@@ -261,7 +261,9 @@ def punch_up_ending(winner: dict, flagged: bool) -> str:
     )
     response = client.messages.parse(
         model=MODEL,
-        max_tokens=4000,
+        # Generous cap: adaptive thinking shares this budget, and twist-
+        # crafting is think-heavy. Unused headroom costs nothing.
+        max_tokens=12000,
         system=(
             "You are the script doctor for a shorts channel narrating Reddit "
             "stories. Your one job: the ending must hit like a BLACK MIRROR "
@@ -304,7 +306,7 @@ def generate_upload_copy(winner: dict) -> UploadCopy:
     client = anthropic.Anthropic()
     response = client.messages.parse(
         model=MODEL,
-        max_tokens=2000,
+        max_tokens=6000,  # headroom for adaptive thinking + the copy itself
         system=(
             "You write upload copy for a shorts channel that narrates wild "
             "Reddit stories over gameplay footage. Your captions create "
