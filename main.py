@@ -45,6 +45,8 @@ def main():
     ap.add_argument("--words-per-caption", type=int, default=1, help="words shown at once (0 = random 1-2)")
     ap.add_argument("--max-videos", type=int, default=3,
                     help="build up to this many videos per crawl (every story clearing the virality bar)")
+    ap.add_argument("--min-score", type=int, default=65,
+                    help="passed through to curate.py: skip the run if nothing scores this high")
     ap.add_argument("--workdir", default="run_output", help="where intermediate files land")
     ap.add_argument("--out-dir", default=None, help="where the finished video lands (default: workdir)")
     args = ap.parse_args()
@@ -61,6 +63,7 @@ def main():
         "--listing", args.listing, "--time-filter", args.time_filter,
         "--seen-file", str(workdir / "seen_story_ids.json"),
         "--max-videos", str(args.max_videos),
+        "--min-score", str(args.min_score),
         "--out", str(story_txt),
     ]
     print("+", " ".join(curate_cmd))
@@ -115,11 +118,13 @@ def main():
             "--out", str(final_mp4),
         ])
 
-        # Park the platform captions next to the video, matching its name, so
-        # an uploader (or a human) grabs video + text as a pair.
+        # Park the platform captions and the curation scorecard next to the
+        # video, matching its name, so uploaders and the web UI get video,
+        # captions, and judgment as one unit.
         upload_src = story.with_suffix(".upload.json")
         if upload_src.exists():
             shutil.copyfile(upload_src, final_mp4.with_suffix(".upload.json"))
+        shutil.copyfile(story.with_suffix(".meta.json"), final_mp4.with_suffix(".meta.json"))
         finished.append(final_mp4)
 
     print(f"\nDone -> {len(finished)} video(s):")

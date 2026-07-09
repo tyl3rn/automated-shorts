@@ -237,11 +237,20 @@ def build_prompt(candidates):
 
 def score_candidates(candidates) -> Scorecard:
     client = anthropic.Anthropic()
+    system = SYSTEM_PROMPT
+    try:
+        from feedback import taste_memory
+        taste = taste_memory()
+        if taste:
+            system = SYSTEM_PROMPT + "\n\n" + taste
+            print("(judge is using the owner taste profile from ratings.json)")
+    except Exception as e:
+        print(f"(taste profile unavailable: {e})", file=sys.stderr)
     response = client.messages.parse(
         model=MODEL,
         max_tokens=16000,
         thinking={"type": "adaptive"},
-        system=SYSTEM_PROMPT,
+        system=system,
         messages=[{"role": "user", "content": build_prompt(candidates)}],
         output_format=Scorecard,
     )
