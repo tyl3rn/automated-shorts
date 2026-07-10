@@ -107,12 +107,27 @@ original title for authenticity, the narrator reads the polished one.
 
 ## Reddit access
 
-Reddit blocks anonymous JSON scraping, and API app creation is gated behind
-an approval process now. So the fetcher uses OAuth when credentials exist
-and otherwise falls back to public RSS feeds with self-pacing (about one
-request per minute before Reddit starts throwing 429s). Slow, but fine for a
-scheduled bot, and the crawl cost gets amortized: one crawl produces every
-story that clears the bar, up to a cap, not just the best one.
+Reddit blocks anonymous JSON scraping (the old `.json` endpoints return 403
+from most IPs now), and creating an API app is gated behind an approval
+process. So the fetcher has two paths and picks automatically:
+
+- With `REDDIT_CLIENT_ID`/`REDDIT_CLIENT_SECRET` set, it uses the official
+  OAuth API at oauth.reddit.com. Fast (100 requests/min) and includes vote
+  counts.
+- Without credentials, it falls back to Reddit's public RSS/Atom feeds,
+  which still work unauthenticated. `r/<sub>/top/.rss` returns the listing
+  with full post text, and each post's own `.rss` returns its comments. The
+  catch is rate limiting: roughly one request per minute before 429s, so
+  the fetcher self-paces and backs off. A crawl of one listing plus
+  comments for 8 candidates takes about 9 minutes.
+
+RSS feeds carry no vote counts, but the top-of-day feed is already ordered
+by Reddit's own ranking, so position substitutes for score, and the judge
+works from story text and comment text anyway. Both paths return the same
+shape to the rest of the pipeline.
+
+The slow crawl gets amortized: one crawl produces every story that clears
+the bar, up to a cap, not just the best one.
 
 ## Modules
 
