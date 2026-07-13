@@ -60,6 +60,13 @@
   .note { flex: 1; font-size: 12px; padding: 5px 8px; }
   .flash { font-size: 11px; color: #666; }
   .empty { color: #888; padding: 24px 0; }
+  .mrow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .mrow input { width: 76px; font-size: 12px; padding: 5px 6px; }
+  .mrow button { padding: 4px 10px; font-size: 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; background: #fff; }
+  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
+  th { background: #f4f4f4; font-weight: 600; }
+  td.num, th.num { text-align: right; }
 </style>
 </head>
 <body>
@@ -118,6 +125,18 @@
 <div id="status" hidden>
   <div><span id="stage"></span><span id="elapsed"></span></div>
   <pre id="log"></pre>
+</div>
+
+<div id="analysis" hidden>
+  <h2>Judge vs reality</h2>
+  <div id="correlations" class="meta" style="margin-bottom:8px"></div>
+  <table id="antable">
+    <thead><tr>
+      <th>title</th><th>sub</th><th>judged</th><th>views</th>
+      <th>eng %</th><th>compl %</th>
+    </tr></thead>
+    <tbody></tbody>
+  </table>
 </div>
 
 <h2>Library</h2>
@@ -269,11 +288,86 @@ function card(v) {
   body.appendChild(rateRow);
   body.appendChild(flash);
 
+  // real platform numbers, entered after posting
+  const m = v.metrics || {};
+  const mrow = document.createElement("div");
+  mrow.className = "mrow";
+  const fields = [
+    ["views", "views"], ["likes", "likes"],
+    ["comments", "comments"], ["completion_pct", "compl %"],
+  ];
+  const inputs = {};
+  for (const [key, ph] of fields) {
+    const inp = document.createElement("input");
+    inp.type = "number";
+    inp.placeholder = ph;
+    inp.min = 0;
+    if (m[key] != null) inp.value = m[key];
+    inputs[key] = inp;
+    mrow.appendChild(inp);
+  }
+  const saveM = document.createElement("button");
+  saveM.textContent = "Save stats";
+  saveM.onclick = async () => {
+    await api("/api/metrics", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        video: v.file,
+        views: parseInt(inputs.views.value, 10) || 0,
+        likes: parseInt(inputs.likes.value, 10) || 0,
+        comments: parseInt(inputs.comments.value, 10) || 0,
+        completion_pct: inputs.completion_pct.value === "" ? null : parseFloat(inputs.completion_pct.value),
+      }),
+    });
+    saveM.textContent = "Saved";
+    setTimeout(() => saveM.textContent = "Save stats", 1200);
+    loadAnalysis();
+  };
+  mrow.appendChild(saveM);
+  body.appendChild(mrow);
+
   el.appendChild(body);
   return el;
 }
 
+async function loadAnalysis() {
+  const a = await api("/api/analysis");
+  const has = a.rows && a.rows.length > 0;
+  $("analysis").hidden = !has;
+  if (!has) return;
+
+  const corr = [];
+  const names = {views: "views", engagement_pct: "engagement", completion_pct: "completion"};
+  for (const [k, label] of Object.entries(names)) {
+    const c = a.correlations[k];
+    if (c && c.r !== null) corr.push("judge score vs " + label + ": r = " + c.r + " (n = " + c.n + ")");
+  }
+  $("correlations").textContent = corr.length
+    ? corr.join("    ")
+    : "correlations appear once 3 or more videos have stats";
+
+  const tbody = $("antable").querySelector("tbody");
+  tbody.innerHTML = "";
+  for (const r of a.rows) {
+    const tr = document.createElement("tr");
+    const cells = [
+      [r.title || r.video, false], [r.subreddit || "", false],
+      [r.judged_score ?? "", true], [r.views ?? "", true],
+      [r.engagement_pct ?? "", true], [r.completion_pct ?? "", true],
+    ];
+    for (const [val, num] of cells) {
+      const td = document.createElement("td");
+      td.textContent = val;
+      if (num) td.className = "num";
+      tr.appendChild(td);
+    }
+    tbody.appendChild(tr);
+  }
+}
+
 loadVideos();
+loadAnalysis();
 startPolling();
 </script>
 </body>

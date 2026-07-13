@@ -26,6 +26,7 @@ from pydantic import BaseModel
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 import feedback  # noqa: E402
+import metrics  # noqa: E402
 
 DEMO_DIR = ROOT / "demo"
 RUN_OUTPUT = ROOT / "run_output"
@@ -64,6 +65,15 @@ class RateRequest(BaseModel):
     video: str
     rating: int
     note: str = ""
+
+
+class MetricsRequest(BaseModel):
+    video: str
+    views: int
+    likes: int = 0
+    comments: int = 0
+    completion_pct: float | None = None
+    platform: str = "tiktok"
 
 
 def _job_running() -> bool:
@@ -151,8 +161,10 @@ def list_videos():
         if upload_path.exists():
             upload = json.loads(upload_path.read_text(encoding="utf-8"))
         rating = feedback.get_rating(mp4.name) or {}
+        perf = metrics.get(mp4.name) or {}
         curation = meta.get("curation", {})
         items.append({
+            "metrics": {k: perf.get(k) for k in ("views", "likes", "comments", "completion_pct")},
             "file": mp4.name,
             "size_mb": round(mp4.stat().st_size / 1e6, 1),
             "created": time.strftime("%Y-%m-%d %H:%M", time.localtime(mp4.stat().st_mtime)),
@@ -179,25 +191,45 @@ def serve_video(name: str):
     return FileResponse(path, media_type="video/mp4")
 
 
+def _video_meta(video: str) -> dict:
+    """Meta sidecar if present, else reconstructed from upload copy/filename
+    (older videos predate the sidecar)."""
+    meta_path = (DEMO_DIR / video).with_suffix(".meta.json")
+    if meta_path.exists():
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+    stem = Path(video).stem
+    meta = {"title": stem, "subreddit": stem.split("-")[0], "curation": {}}
+    upload_path = (DEMO_DIR / video).with_suffix(".upload.json")
+    if upload_path.exists():
+        upload = json.loads(upload_path.read_text(encoding="utf-8"))
+        if upload.get("youtube_title"):
+            meta["title"] = upload["youtube_title"]
+    return meta
+
+
 @app.post("/api/rate")
 def rate(req: RateRequest):
     if not (1 <= req.rating <= 5):
         raise HTTPException(400, "rating must be 1-5")
     if Path(req.video).name != req.video or not (DEMO_DIR / req.video).exists():
         raise HTTPException(404, "video not found")
-    meta = None
-    meta_path = (DEMO_DIR / req.video).with_suffix(".meta.json")
-    if meta_path.exists():
-        meta = json.loads(meta_path.read_text(encoding="utf-8"))
-    else:
-        # Older videos predate the meta sidecar; reconstruct enough for the
-        # taste profile from the upload copy and the filename.
-        stem = Path(req.video).stem
-        meta = {"title": stem, "subreddit": stem.split("-")[0], "curation": {}}
-        upload_path = (DEMO_DIR / req.video).with_suffix(".upload.json")
-        if upload_path.exists():
-            upload = json.loads(upload_path.read_text(encoding="utf-8"))
-            if upload.get("youtube_title"):
-                meta["title"] = upload["youtube_title"]
-    feedback.record_rating(req.video, req.rating, req.note, meta)
+    feedback.record_rating(req.video, req.rating, req.note, _video_meta(req.video))
     return {"saved": True}
+
+
+@app.post("/api/metrics")
+def save_metrics(req: MetricsRequest):
+    if Path(req.video).name != req.video or not (DEMO_DIR / req.video).exists():
+        raise HTTPException(404, "video not found")
+    if req.views < 0 or req.likes < 0 or req.comments < 0:
+        raise HTTPException(400, "counts cannot be negative")
+    if req.completion_pct is not None and not (0 <= req.completion_pct <= 100):
+        raise HTTPException(400, "completion must be 0-100")
+    metrics.record(req.video, req.views, req.likes, req.comments,
+                   req.completion_pct, req.platform, _video_meta(req.video))
+    return {"saved": True}
+
+
+@app.get("/api/analysis")
+def get_analysis():
+    return metrics.analysis()

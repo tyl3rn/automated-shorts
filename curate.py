@@ -242,10 +242,18 @@ def score_candidates(candidates) -> Scorecard:
         from feedback import taste_memory
         taste = taste_memory()
         if taste:
-            system = SYSTEM_PROMPT + "\n\n" + taste
+            system = system + "\n\n" + taste
             print("(judge is using the owner taste profile from ratings.json)")
     except Exception as e:
         print(f"(taste profile unavailable: {e})", file=sys.stderr)
+    try:
+        from metrics import performance_memory
+        perf = performance_memory()
+        if perf:
+            system = system + "\n\n" + perf
+            print("(judge is using real platform results from metrics.json)")
+    except Exception as e:
+        print(f"(performance memory unavailable: {e})", file=sys.stderr)
     response = client.messages.parse(
         model=MODEL,
         max_tokens=16000,

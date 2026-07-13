@@ -82,13 +82,22 @@ zeroed. If nothing clears the bar (default 65), the run skips instead of
 producing a dud. Scores drift a few points between runs since it's a
 judgment, and the threshold accounts for that.
 
-There's also a feedback loop. The web UI lets you rate finished videos 1-5
-with a note. Ratings go to `ratings.json`, and every later run builds a
-taste profile from them (per-subreddit track record, plus examples of what
-got rated up or down and why) that gets prepended to the judge's prompt and
-the script doctor's prompt. Not fine-tuning, just a memory file, but it
-means the pipeline gets more aligned with what you actually want the more
-you rate.
+There's also a feedback loop, two layers of it. The web UI lets you rate
+finished videos 1-5 with a note; ratings go to `ratings.json`, and every
+later run builds a taste profile from them (per-subreddit track record,
+plus examples of what got rated up or down and why) that gets prepended to
+the judge's prompt and the script doctor's prompt. Not fine-tuning, just a
+memory file, but it means the pipeline gets more aligned with what you
+actually want the more you rate.
+
+The second layer checks the judge against reality. After posting a video
+you enter its actual numbers (views, likes, comments, completion rate) in
+the UI. The analysis view joins those with the judge's scores and computes
+the correlation between judged score and each metric, which answers the
+question that matters: does a judged-88 actually outperform a judged-66?
+Real results also feed back into the judge's prompt, weighted above the
+rubric, so subreddits and story shapes that perform well in practice get
+favored over ones that only look good on paper.
 
 ## Model choices
 
@@ -141,6 +150,7 @@ the bar, up to a cap, not just the best one.
 | `main.py` | runs the whole thing |
 | `web/server.py` | local FastAPI console: generate, watch progress, rate videos |
 | `feedback.py` | ratings store + taste profile for the judge and doctor |
+| `metrics.py` | real platform stats, judge-vs-reality correlation, performance memory |
 
 ## Running it
 
