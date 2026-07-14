@@ -125,6 +125,12 @@ one. Whether an ending was rewritten is recorded in the video's
 
 ## What the videos look like
 
+<img src="docs/video-opening.jpg" width="270" alt="First second of a generated video: fake Reddit post card over gameplay footage">
+
+The first second of a generated video: the post card over the gameplay
+footage, right before the narrator finishes the title and the card whooshes
+out.
+
 Vertical 1080x1920 over a random slice of the background footage (a random
 start offset per video, so one long gameplay clip never repeats). The video
 opens on a fake Reddit post card: invented username and avatar, verified
@@ -200,6 +206,12 @@ one HTML file. It does four things:
 
 Everything the console knows lives on disk, so restarting the server or
 the browser loses nothing.
+
+<img src="docs/web-console.png" width="720" alt="The web console: generate form, judge vs reality table, video library with rating buttons and stats inputs">
+
+The console with two videos in the library. Under each one: the TikTok
+caption with a copy button, the 1-5 rating row with a note field for the
+judge, and the stats inputs that feed the judge-vs-reality table up top.
 
 ## Files it writes
 
