@@ -108,11 +108,37 @@ ending so the twist actually lands is the one real writing task in the
 pipeline and it only runs once per posted story. A day's batch costs a few
 cents total.
 
-The script doctor does more than endings: it smooths broken English into
-something a narrator can read, expands abbreviations (AITAH becomes "am I
-the asshole", 1800 becomes "6pm"), and swaps words that trip platform
-moderation for the substitutes the genre uses. The intro card keeps the
-original title for authenticity, the narrator reads the polished one.
+The script doctor is really a narration-script pass with four jobs. First,
+the ending: if the judge flagged it flat, the doctor replaces the final
+stretch with a twist that recontextualizes the story, ideally hanging off a
+detail mentioned earlier. House rules: the last line is the twist, stated
+flat, nothing after it, and a story never ends on a question to the
+audience ("so am I the asshole?" gets cut even when the rest is kept).
+Second, it smooths broken English into something a narrator can say out
+loud without sounding off. Third, it expands anything that reads wrong as
+speech: AITAH becomes "am I the asshole", 24M becomes "a 24 year old guy",
+1800 becomes "6pm". Fourth, it swaps words that trip platform moderation
+for the substitutes the genre uses (unalive and friends). The intro card
+keeps the original title for authenticity; the narrator reads the polished
+one. Whether an ending was rewritten is recorded in the video's
+`.meta.json`, so there's always a record of which stories are embellished.
+
+## What the videos look like
+
+Vertical 1080x1920 over a random slice of the background footage (a random
+start offset per video, so one long gameplay clip never repeats). The video
+opens on a fake Reddit post card: invented username and avatar, verified
+badge, an award row, 99+ upvotes and comments, and the real post title. The
+narrator reads the title while the card is up; the moment the title ends
+the card whooshes out (a synthesized pink-noise swell, quiet) and the story
+starts immediately.
+
+Narration is edge-tts at 1.33x speed, with the voice drawn at random from a
+pool of US male voices so consecutive videos don't sound identical.
+Captions are one word at a time, large, dead center, in a single color per
+video (all white or all yellow, rolled per run), with a fast fade-in. Each
+caption holds on screen until the next one starts so the screen is never
+blank mid-sentence.
 
 ## Reddit access
 
@@ -152,6 +178,40 @@ the bar, up to a cap, not just the best one.
 | `feedback.py` | ratings store + taste profile for the judge and doctor |
 | `metrics.py` | real platform stats, judge-vs-reality correlation, performance memory |
 
+## Web console
+
+`start_ui.bat` (or `python -m uvicorn web.server:app --port 8000`) serves a
+local single-page console at 127.0.0.1:8000. No build step, no framework,
+one HTML file. It does four things:
+
+- Generate: pick a subreddit from a dropdown (or type any subreddit), a
+  time window from hour to all time, max videos, and the score bar, then
+  start a run. Since a crawl takes minutes, the run happens as a background
+  job and the page polls its stage ("crawling reddit", "judging
+  candidates", "rendering videos") with the live log underneath. One run at
+  a time, because parallel crawls would just rate-limit each other.
+- Library: every finished video plays inline, next to its judge score,
+  category, twist-ending flag, and TikTok caption with a copy button.
+- Rate: 1-5 plus an optional note per video. This writes the taste memory
+  the judge and doctor read on future runs.
+- Stats: after posting a video, enter its real views, likes, comments, and
+  completion rate. The "Judge vs reality" table at the top joins these
+  with judge scores and shows the correlation once there's enough data.
+
+Everything the console knows lives on disk, so restarting the server or
+the browser loses nothing.
+
+## Files it writes
+
+| File | What |
+|---|---|
+| `demo/<name>.mp4` | finished video |
+| `demo/<name>.upload.json` | TikTok caption, YouTube title/description, AI disclosure flags, source permalink |
+| `demo/<name>.meta.json` | full scorecard, subreddit, spoken title, whether the ending was rewritten |
+| `run_output/seen_story_ids.json` | post IDs already used, so no story becomes two videos |
+| `ratings.json` | your 1-5 ratings and notes, feeds the taste profile |
+| `metrics.json` | real platform stats per video, feeds the analysis and the judge |
+
 ## Running it
 
 You need:
@@ -162,6 +222,8 @@ You need:
   cents, so even the $5 minimum credit lasts a long time
 - a background gameplay video (any long landscape mp4 works, it gets
   center-cropped to vertical)
+- internet access for narration (edge-tts uses Microsoft's free TTS
+  endpoint, no key needed)
 
 ```bash
 pip install -r requirements.txt
@@ -172,7 +234,7 @@ python main.py --background backgrounds/parkour.mp4 --out-dir demo
 # or pick the subreddit and go deeper in time
 python main.py nosleep --time-filter week --background backgrounds/parkour.mp4 --out-dir demo
 
-# or use the web console
+# or use the web console (or just double-click start_ui.bat on Windows)
 python -m uvicorn web.server:app --port 8000
 ```
 
